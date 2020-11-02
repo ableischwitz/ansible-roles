@@ -1,0 +1,8 @@
+---
+- name: "install required base packages"
+  become: true
+  package:
+    name:
+      - python3-libsemanage
+  tags: always
+

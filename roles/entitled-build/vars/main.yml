@@ -1,0 +1,15 @@
+---
+# vars file for entitled-build
+subscription_host: localhost
+
+entitlement_certificates:
+  - test1
+  - test2
+
+BASE64_ENCODED_PEM_FILE:
+  - test1: "this is a base64 encoded text for the test1 - pem file"
+  - test2: "this is a base64 encoded text for the test2 - pem file"
+BASE64_ENCODED_PEM_FILE_KEY:
+  - test1: "this is a base64 encoded text for the test1 - pem-key file"
+  - test2: "this is a base64 encoded text for the test2 - pem-key file"
+

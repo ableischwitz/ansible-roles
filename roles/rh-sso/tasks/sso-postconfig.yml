@@ -1,0 +1,146 @@
+- name: "add admin user to SSO - this is unconditional and will not change a user-password!!"
+  become: true
+  become_user: jboss
+  command: "/opt/rh/rh-sso7/root/usr/share/keycloak/bin/add-user-keycloak.sh -r {{ sso_admin_auth_realm }} -u {{ sso_admin_user }} -p {{ sso_admin_pass }}"
+  ignore_errors: true 
+  changed_when: false
+  tags: always
+
+- name: "enable rh-sso7 service"
+  become: true
+  systemd:
+    service: rh-sso7
+    enabled: true
+    state: restarted
+  tags: always
+
+- name: "Wait for SSO to become ready"
+  uri:
+    url: "{{ sso_base_url }}"
+    follow_redirects: false
+    status_code:
+      - 200
+      - 303
+  register: _sso_result
+  until: _sso_result.status == 303 or _sso_result.status == 200
+  retries: 20
+  delay: 5
+  delegate_to: 127.0.0.1
+  tags: always
+
+- name: "Create Token for service Keycloak"
+  uri:
+    url: "{{ sso_base_url }}/realms/master/protocol/openid-connect/token"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      username: "{{ sso_admin_user }}"
+      password: "{{ sso_admin_pass }}"
+      grant_type: "password"
+      client_id: "admin-cli"
+  register: keycloak_token
+  tags: always
+  tags: configure_realm
+
+- name: "Find out, if Realm {{ sso_client_realm }} for service Keycloak exists"
+  uri:
+    url: "{{ sso_base_url }}/admin/realms/{{ sso_client_realm }}"
+    method: GET
+    status_code:
+     - 200
+     - 404
+    headers:
+      Accept: "application/json"
+      Authorization: "Bearer {{ keycloak_token.json.access_token }}"
+  register: keycloak_realm_exists
+  tags: always
+
+- name: "Create Realm {{ sso_client_realm }} for service Keycloak"
+  uri:
+    url: "{{ sso_base_url }}/admin/realms"
+    method: POST
+    body_format: json
+    body: |
+      {
+        "id": "{{ sso_client_realm }}",
+        "realm": "{{ sso_client_realm }}",
+        "displayName": "{{ sso_client_realm }}",
+        "enabled": true,
+        "sslRequired": "external",
+        "registrationAllowed": false,
+        "loginWithEmailAllowed": true,
+        "duplicateEmailsAllowed": false,
+        "resetPasswordAllowed": false,
+        "editUsernameAllowed": false,
+        "bruteForceProtected": true,
+        "adminTheme": "rh-sso",
+        "accountTheme": "rh-sso",
+        "loginTheme": "rh-sso",
+        "emailTheme": "rh-sso",
+        "internationalizationEnabled": true,
+        "supportedLocales": ["en", "de"],
+        "defaultLocale": "en",
+        "smtpServer": {
+          "host": "{{ sso_mailserver_host }}",
+          "port": "{{ sso_mailserver_port }}",
+          "ssl": "{{ sso_mailserver_use_ssl }}",
+          "starttls": "{{ sso_mailserver_use_starttls }}",
+          "from": "{{ sso_mailserver_from }}",
+          "fromDisplayName": "{{ sso_mailserver_from_displayname }}"
+        }
+      }
+    remote_src: "no"
+    status_code:
+     - 201
+    headers:
+      Content-type: "application/json"
+      Accept: "application/json"
+      Authorization: "Bearer {{ keycloak_token.json.access_token }}"
+  register: keycloak_realm_create
+  when: "keycloak_realm_exists.status == 404"
+  tags: always
+
+- name: "Update Realm {{ sso_client_realm }} for service Keycloak"
+  uri:
+    url: "{{ sso_base_url }}/admin/realms/{{ sso_client_realm }}"
+    method: PUT
+    body_format: json
+    body: |
+      {
+        "id": "{{ sso_client_realm }}",
+        "realm": "{{ sso_client_realm }}",
+        "displayName": "{{ sso_client_realm }}",
+        "enabled": true,
+        "sslRequired": "external",
+        "registrationAllowed": false,
+        "loginWithEmailAllowed": true,
+        "duplicateEmailsAllowed": false,
+        "resetPasswordAllowed": false,
+        "editUsernameAllowed": false,
+        "bruteForceProtected": true,
+        "adminTheme": "rh-sso",
+        "accountTheme": "rh-sso",
+        "loginTheme": "rh-sso",
+        "emailTheme": "rh-sso",
+        "internationalizationEnabled": true,
+        "supportedLocales": ["en", "de"],
+        "defaultLocale": "en",
+        "smtpServer": {
+          "host": "{{ sso_mailserver_host }}",
+          "port": "{{ sso_mailserver_port }}",
+          "ssl": "{{ sso_mailserver_use_ssl }}",
+          "starttls": "{{ sso_mailserver_use_starttls }}",
+          "from": "{{ sso_mailserver_from }}",
+          "fromDisplayName": "{{ sso_mailserver_from_displayname }}"
+        }
+      }
+    remote_src: "no"
+    status_code:
+     - 204
+    headers:
+      Content-type: "application/json"
+      Accept: "application/json"
+      Authorization: "Bearer {{ keycloak_token.json.access_token }}"
+  register: keycloak_realm_create
+  when: "keycloak_realm_exists.status == 200"
+  tags: always

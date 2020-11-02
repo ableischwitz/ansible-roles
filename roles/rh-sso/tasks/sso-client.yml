@@ -1,0 +1,36 @@
+---                                                                         
+- name: "set facts"                                                         
+  set_fact:                                                                 
+    sso_base_url: "https://{{ ansible_fqdn }}/auth"                         
+  tags: always                                                              
+                                                                            
+- name: "create SSO client {{ sso_client_name }}"
+  local_action:
+    module: keycloak_client
+    auth_client_id: admin-cli
+    auth_keycloak_url: "{{ sso_base_url }}"
+    auth_realm: "{{ sso_admin_auth_realm }}"
+    auth_username: "{{ sso_admin_user }}"
+    auth_password: "{{ sso_admin_pass }}"
+    client_id: "{{ sso_client }}"
+    state: present
+    client_authenticator_type: client-secret
+    public_client: false
+    secret: "{{ sso_client_secret }}"
+    name: "{{ sso_client_name }}"
+    description: "{{ sso_client_description }}"
+    direct_access_grants_enabled: true
+    enabled: true
+    protocol: openid-connect
+    realm: "{{ sso_client_realm }}"
+    redirect_uris: "{{ sso_client_redirect_uris }}"
+    root_url: "{{ sso_client_root_url }}"
+    standard_flow_enabled: yes
+  register: results
+  tags: always
+
+- name: Print results
+  debug:
+    msg: "{{ results }}"
+  tags: always
+

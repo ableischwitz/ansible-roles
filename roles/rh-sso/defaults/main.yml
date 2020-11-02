@@ -1,0 +1,32 @@
+---
+# defaults file for rh-sso
+
+ipa_host: "{{ lookup('dig', '_kerberos-master._tcp.{{ ansible_domain }}', 'qtype=SRV') | regex_replace('^\\d+ \\d+ \\d+ (\\.*)', '\\1') }}"
+ipa_username: username
+ipa_password: password
+
+sso_admin_user: admin
+sso_admin_pass: admin
+sso_admin_auth_realm: master
+
+sso_mailserver_host: "mail.example.com"
+sso_mailserver_port: "465"
+sso_mailserver_use_ssl: true
+sso_mailserver_use_starttls: true
+sso_mailserver_from: "sso@example.com"
+sso_mailserver_from_displayname: "SSO"
+
+sso_client: OpenID-client
+sso_client_name: OpenID sample client
+sso_client_description: OpenID sample client
+sso_client_realm: ExampleRealm
+sso_client_secret: REALLYWELLKEPTSECRET
+sso_client_redirect_uris:
+  - https://client.example.com/oauth2callback/SSO
+sso_client_root_url: https://client.example.com
+
+pg_root_vg: rootvg
+pg_lv_size: 10G
+pg_username: rh-sso
+# we need to deal with XML documents, better escape XML specific chars
+pg_password: "{{ lookup('password', '/tmp/passwordfile chars=ascii_letters,digits,hexdigits,punctuation') }}"

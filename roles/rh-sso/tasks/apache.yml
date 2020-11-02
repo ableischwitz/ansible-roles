@@ -1,0 +1,147 @@
+---
+- name: "install required packages"
+  become: true
+  package:
+    name: 
+      - httpd
+      - mod_ssl
+  tags: always
+
+- name: "apply http->https redirection"
+  become: true
+  template:
+    dest: /etc/httpd/conf.d/http-redirect.conf
+    src: http-redirect.conf.j2
+  tags: always
+
+- name: "create IDM service for HTTP/{{ ansible_fqdn }}"
+  ipa_service:
+    name: "HTTP/{{ ansible_fqdn }}"
+    state: present
+    ipa_host: "{{ ipa_host }}"
+    ipa_user: "{{ ipa_username }}"
+    ipa_pass: "{{ ipa_password }}"
+  tags: always
+
+- name: "check if idm manages https certificate with name 'sso'"
+  become: true
+  shell: ipa-getcert list -i sso
+  ignore_errors: true
+  changed_when: false
+  register: certificate_installed
+  tags: always
+
+- name: "create certificate 'sso' for {{ ansible_fqdn }}"
+  become: true
+  command: ipa-getcert request \
+    -k /etc/pki/tls/private/httpd.key \
+    -f /etc/pki/tls/certs/httpd.pem \
+    -I sso \
+    -g 4096 \
+    -C "/usr/bin/systemctl restart httpd" \
+    -K "HTTP/{{ ansible_fqdn }}"
+  when: certificate_installed is failed
+  tags: always
+
+- name: "adjust apache SSLCertificateFile configuration"
+  become: true
+  lineinfile:
+    path: /etc/httpd/conf.d/ssl.conf
+    regexp: '^SSLCertificateFile'
+    line: "SSLCertificateFile /etc/pki/tls/certs/httpd.pem"
+  notify: reload_http
+  tags: always
+  
+- name: "adjust apache SSLCertificateKeyFile configuration"
+  become: true
+  lineinfile:
+    path: /etc/httpd/conf.d/ssl.conf
+    regexp: '^SSLCertificateKeyFile'
+    line: "SSLCertificateKeyFile /etc/pki/tls/private/httpd.key"
+  notify: reload_http
+  tags: always
+  
+- name: "ensure apache can access key/cert"
+  become: true
+  file:
+    path: "{{ item }}"
+    group: apache
+    owner: apache
+    mode: '0440'
+  with_items:
+    - /etc/pki/tls/certs/httpd.pem
+    - /etc/pki/tls/private/httpd.key
+  notify: reload_http
+  tags: always
+
+- name: "append reverse proxy configuration apache config"
+  become: true
+  blockinfile:
+    path: /etc/httpd/conf.d/ssl.conf
+    insertafter: '^#SSLOptions \+FakeBasicAuth \+ExportCertData \+StrictRequire'
+    #insertbefore: "^</VirtualHost>"
+    block: |
+      ProxyPreserveHost On
+      SSLProxyEngine On
+      SSLProxyCheckPeerCN on
+      SSLProxyCheckPeerExpire on
+      RequestHeader set X-Forwarded-Proto "https"
+      RequestHeader set X-Forwarded-Port "443"
+      ProxyPass / http://127.0.0.1:8080/
+      ProxyPassReverse / http://127.0.0.1:8080/
+  notify: reload_http
+  tags: always
+
+- name: "allow httpd to connect to network"
+  become: true
+  seboolean:
+    name: httpd_can_network_connect
+    state: yes
+    persistent: yes
+  notify: reload_http
+  tags: always
+
+- name: "open firewall ports for https traffic"
+  become: true
+  firewalld:
+    service: "{{ item }}"
+    state: enabled
+    permanent: yes
+    immediate: yes
+  loop:
+    - http
+    - https
+  tags: always
+
+- name: "check if service keytab exists"
+  stat:
+    path: /etc/krb5-keycloak.keytab
+  register: keytab_stat
+  tags: always
+
+- name: "create /etc/krb5-keycloak.keytab"
+  become: true
+  shell: |
+    echo {{ ipa_password }}|kinit {{ ipa_username }}
+    ipa-getkeytab -p HTTP/{{ ansible_fqdn }} -s {{ ipa_host }} -k /etc/krb5-keycloak.keytab
+  register: get_keytab
+  when: not keytab_stat.stat.exists
+  changed_when: "'Keytab successfully retrieved and stored in' in get_keytab.stdout"
+  tags: always
+
+- name: "ensure keytab permissions"
+  become: true
+  file:
+    path: /etc/krb5-keycloak.keytab
+    group: 185
+    owner: root
+    mode: '0640'
+    state: file
+  tags: always
+
+- name: "ensure apache is started"
+  become: true
+  service:
+    name: httpd
+    enabled: yes
+  tags: always

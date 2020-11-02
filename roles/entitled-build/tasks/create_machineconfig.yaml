@@ -1,0 +1,5 @@
+- name: Create MachineConfig template
+  template:
+    src: machineconfig.yaml
+    dest: /tmp/MCO.yaml
+

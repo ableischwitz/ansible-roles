@@ -1,0 +1,265 @@
+- name: "set facts"
+  set_fact:
+    keycloak_modules_dir: "/opt/rh/rh-sso7/root/usr/share/keycloak/modules/system/layers/keycloak/org/"
+    standalone_xml: "/etc/opt/rh/rh-sso7/keycloak/standalone/standalone.xml"
+  tags: always
+  
+- name: "Enable postgres module"
+  become: true
+  template:
+    src: dnf-postgresql.module.j2
+    dest: /etc/dnf/modules.d/postgresql.module
+  tags: always
+
+- name: "Install postgresql"
+  become: true
+  dnf:
+    name:
+      - postgresql-server
+      - postgresql-jdbc
+      - postgresql
+      - python3-psycopg2
+    state: latest
+  tags: always
+
+- name: "Create LVM volume for postgres data"
+  become: true
+  command:
+    cmd: "lvcreate -n lv_varlibpgsql -L {{ pg_lv_size }} {{ pg_root_vg }}"
+    creates: "/dev/mapper/{{ pg_root_vg }}-lv_varlibpgsql"
+  register: lvm_create
+  tags: always
+
+- name: "Check for filesystem present"
+  become: true
+  command:
+    cmd: "xfs_info /dev/mapper/{{ pg_root_vg }}-lv_varlibpgsql"
+  ignore_errors: true
+  changed_when: false
+  register: xfs_info
+  when: lvm_create.rc == 0
+  tags: always
+
+- name: "Create filesystem on filesystem"
+  become: true
+  command:
+    cmd: "mkfs.xfs /dev/mapper/{{ pg_root_vg }}-lv_varlibpgsql"
+  when: xfs_info.rc != 0 and lvm_create.rc == 0
+  register: xfs_create
+  tags: always
+
+- name: "Mount filesystem for postgresql"
+  become: true
+  mount:
+    path: /var/lib/pgsql
+    src: "/dev/mapper/{{ pg_root_vg }}-lv_varlibpgsql"
+    fstype: xfs
+    opts: defaults
+    state: mounted
+  notify:
+    - postgres_initdb
+    - postgres_create_user
+    - postgres_create_db
+    - postgres_hba
+  tags: always
+
+- name: "Ensure ownership of postgresql directory"
+  become: true
+  file:
+    path: /var/lib/pgsql/
+    owner: postgres
+    group: postgres
+    state: directory
+    setype: postgresql_db_t
+    recurse: true
+  tags: always
+
+- name: "Ensure module path for pg exists"
+  become: true
+  file:
+    dest: /opt/rh/rh-sso7/root/usr/share/keycloak/modules/system/layers/keycloak/org//postgresql/main
+    state: directory
+    recurse: true
+    owner: jboss
+    group: jboss
+  tags: always
+
+- name: "Adjust RH-SSO datasources: link postgresql java driver to keycloak"
+  become: true
+  become_user: jboss
+  file:
+    src: /usr/share/java/postgresql-jdbc/postgresql.jar
+    dest: "{{ keycloak_modules_dir }}/postgresql/main/postgresql.jar"
+    state: link
+  tags: always
+
+- name: "Adjust RH-SSO datasources: add driver"
+  become: true
+  become_user: jboss
+  template:
+    src: module.xml.j2
+    dest: "{{ keycloak_modules_dir }}/postgresql/main/module.xml"
+  tags: always
+
+- name: "Add Postgresql driver to drivers section of RH-SSO"
+  become: true
+  become_user: jboss
+  command:
+    cmd: "/opt/rh/rh-sso7/root/usr/share/keycloak/bin/jboss-cli.sh --connect --command='/subsystem=datasources/jdbc-driver=postgresql:add(driver-name=postgresql,driver-module-name=org.postgresql,driver-xa-datasource-class-name=org.postgresql.xa.PGXADataSource)'"
+  ignore_errors: true
+  changed_when: false
+  tags: always
+
+#  blockinfile:
+#    path: "{{ standalone_xml }}"
+#    insertafter: "<drivers>"
+#    marker: "                    <!-- {mark} ANSIBLE MANAGED DRIVER BLOCK -->"
+#    block: |2
+#                <driver name="postgresql" module="org.postgresql">
+#                    <xa-datasource-class>org.postgresql.xa.PGXADataSource</xa-datasource-class>
+#                </driver>
+#  tags: never
+
+- name: "Remove default H2 database source from datasources section of RH-SSO"
+  become: true
+  become_user: jboss
+  command:
+    cmd: "/opt/rh/rh-sso7/root/usr/share/keycloak/bin/jboss-cli.sh --connect --command='/subsystem=datasources/data-source=KeycloakDS:remove'"
+  ignore_errors: true
+  changed_when: false
+  tags: always
+
+# - name: "Remove old H2 database source from datasource section of RH-SSO"
+#   become: true
+#   become_user: jboss
+#   xml:
+#     path: "{{ standalone_xml }}"
+#     namespaces:
+#       dom: urn:jboss:domain:10.0
+#       ds: urn:jboss:domain:datasources:5.0
+# 
+#     # use nice xpath - does not work, xml not finging element
+#     # xpath: '/dom:server/dom:profile/ds:subsystem/ds:datasources/ds:datasource/@ds:jndi-name="java:jboss/datasources/KeycloakDS"'
+#     xpath: '//*[local-name()="datasources"]/*[local-name()="datasource"][@jndi-name="java:jboss/datasources/KeycloakDS"]'
+#     # just remove the h2 driver for the keycloakDS datasource - does not work, xml complains
+#     # xpath: '//*[local-name()="datasources"]/*[local-name()="datasource"][@jndi-name="java:jboss/datasources/KeycloakDS"] | //*[local-name()="datasources"]/*[local-name()="datasource"]/*[local-name()="driver" = "h2"]'
+#     state: absent
+#   tags: never
+
+- name: "Ensure postgresql datasource section is added to {{ standalone_xml }}"
+  command:
+    cmd: |
+       /opt/rh/rh-sso7/root/usr/share/keycloak/bin/jboss-cli.sh --connect --command="
+        data-source add
+        --name=KeycloakDS
+        --jndi-name=java:jboss/datasources/KeycloakDS
+        --use-java-context=true
+        --connection-url=jdbc:postgresql://localhost/keycloak
+        --driver-name=postgresql
+        --max-pool-size=20
+        --user-name={{ pg_username }}
+        --password={{ pg_password | escape }}
+        --enabled=true"
+  ignore_errors: true
+  changed_when: false
+  tags: always
+  notify:
+    - rh_sso_service
+    
+# - name: "Add Postgresql datasource to datasource section of RH-SSO"
+#   become: true
+#   become_user: jboss
+#   blockinfile:
+#     path: "{{ standalone_xml }}"
+#     insertafter: "<datasources>"
+#     marker: ""
+#     block: |4
+#                 <datasource jndi-name="java:jboss/datasources/KeycloakDS" pool-name="KeycloakDS" enabled="true" use-java-context="true">
+#                     <connection-url>jdbc:postgresql://localhost/keycloak</connection-url>
+#                     <driver>postgresql</driver>
+#                     <pool>
+#                         <max-pool-size>20</max-pool-size>
+#                     </pool>
+#                     <security>
+#                         <user-name>{{ pg_username }}</user-name>
+#                         <password>{{ pg_password | escape }}</password>
+#                     </security>
+#                 </datasource>
+#   tags: always
+#   notify:
+#     - rh_sso_service
+
+- name: "Ensure Postgresql is initialized"
+  become: true
+  command:
+    cmd: /usr/bin/postgresql-setup --initdb
+    creates: /var/lib/pgsql/data
+  tags: always
+
+- name: "Ensure Postgresql is running"
+  become: true
+  service:
+    name: postgresql
+    state: started
+  tags: always
+
+- name: "Ensure keycloak db exists"
+  become: true
+  become_user: postgres
+  postgresql_db:
+    name: keycloak
+    encoding: UTF-8
+    template: template0
+  tags: always
+
+- name: "Ensure {{ pg_username }} role exists"
+  become: true
+  become_user: postgres
+  postgresql_user:
+    name: "{{ pg_username }}"
+    password: "{{ pg_password }}"
+    db: keycloak
+    encrypted: yes
+    role_attr_flags: CREATEDB,NOSUPERUSER
+    priv: "ALL"
+    expires: infinity
+  tags: always
+
+- name: "Ensure {{ pg_username }} has access to keycloak"
+  become: true
+  become_user: postgres
+  postgresql_privs:
+    db: keycloak
+    privs: ALL
+    type: database
+    role: "{{ pg_username }}"
+  tags: always
+
+- name: "Ensure {{ pg_username }} is able to login"
+  become: true
+  postgresql_pg_hba:
+    dest: /var/lib/pgsql/data/pg_hba.conf
+    contype: host
+    users: "{{ pg_username }}"
+    source: samehost
+    databases: keycloak
+    method: md5
+    create: true
+  notify:
+    - postgres_service
+  tags: always
+
+- name: "Ensure all handlers are run"
+  meta: flush_handlers
+  tags: always
+
+- name: "Ensure {{ pg_username }} is able to login to keycloak db"
+  postgresql_ping:
+    db: keycloak
+    login_host: localhost
+    login_user: "{{ pg_username }}"
+    login_password: "{{ pg_password }}"
+  register: res
+  failed_when:
+   - res.is_available == false
+  tags: always

@@ -1,0 +1,62 @@
+---
+# handlers file for rh-sso
+- name: reload_http
+  become: true
+  service:
+    name: httpd
+    state: restarted
+
+- name: rh_sso_service
+  become: true
+  service:
+    name: rh-sso7
+    state: restarted
+    enabled: true
+
+- name: postgres_service
+  become: true
+  service:
+    name: postgresql
+    state: restarted
+    enabled: true
+
+- name: postgres_create_user
+  become: true
+  become_user: postgres
+  postgresql_user:
+    db: keycloak
+    name: "{{ pg_username }}"
+    password: "{{ pg_passwd }}"
+    encrypted: yes
+    role_attr_flags: LOGIN,NOSUPERUSER
+    priv: "ALL"
+    expires: infinity
+
+- name: postgres_create_db
+  become: true
+  become_user: postgres
+  postgresql_db:
+    name: keycloak
+    owner: "{{ pg_username }}"
+    encoding: UTF-8
+    template: template0
+
+- name: postgres_permissions
+  become: true
+  become_user: postgres
+  postgresql_privs:
+    db: keycloak
+    privs: ALL
+    type: database
+    role: "{{ pg_username }}"
+
+- name: postgres_hba
+  become: true
+  postgresql_pg_hba:
+    dest: /var/lib/pgsql/data/pg_hba.conf
+    contype: host
+    users: "{{ pg_username }}"
+    source: ::1
+    databases: keycloak
+    method: md5
+    create: true

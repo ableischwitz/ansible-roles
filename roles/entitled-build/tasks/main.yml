@@ -1,0 +1,7 @@
+---
+# tasks file for entitled-build
+- name: Include subscription fetch tasks
+  include_tasks: fetch_subscription.yaml
+
+- name: Include MCO creation task
+  include_tasks: create_machineconfig.yaml

@@ -1,0 +1,10 @@
+NameVirtualHost *:80
+<VirtualHost *:80>
+  ServerName {{ ansible_fqdn }}
+  <IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteRule (.*) https://%{HTTP_HOST}%{REQUEST_URI}%{QUERY_STRING} [R=301,L]
+  </IfModule>
+</VirtualHost>
+

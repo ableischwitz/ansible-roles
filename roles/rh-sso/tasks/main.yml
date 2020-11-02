@@ -1,0 +1,14 @@
+---
+# tasks file for rh-sso
+- include_tasks: basic.yml
+  tags: always
+- include_tasks: apache.yml
+  tags: install_sso
+- include_tasks: sso.yml
+  tags: install_sso
+- include_tasks: sso-pg.yml
+  tags: install_sso_pg
+- include_tasks: sso-postconfig.yml
+  tags: install_sso
+- include_tasks: sso-client.yml
+  tags: install_sso_client
