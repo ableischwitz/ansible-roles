@@ -1,6 +1,7 @@
 ---
 # vars file for entitled-build
 subscription_host: localhost
+create_MCO: false
 
 entitlement_certificates:
   - test1

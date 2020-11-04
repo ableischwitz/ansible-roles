@@ -1,5 +1,5 @@
 - name: Create MachineConfig template
-  template:
+  local_action:
+    module: template
     src: machineconfig.yaml
     dest: /tmp/MCO.yaml
-

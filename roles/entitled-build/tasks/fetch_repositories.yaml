@@ -1,0 +1,9 @@
+---
+- name: Fetch redhat.repo from source-host
+  slurp:
+    src: /etc/yum.repos.d/redhat.repo
+  register: BASE64_ENCODED_REDHAT_REPO_CONF
+  delegate_to: "{{ subscription_host }}"
+
+- set_fact:
+    BASE64_ENCODED_REDHAT_REPO_CONF: "{{ BASE64_ENCODED_REDHAT_REPO_CONF.content }}"

@@ -3,5 +3,13 @@
 - name: Include subscription fetch tasks
   include_tasks: fetch_subscription.yaml
 
+- name: Include repository fetch tasks
+  include_tasks: fetch_repositories.yaml
+
 - name: Include MCO creation task
   include_tasks: create_machineconfig.yaml
+  when: create_MCO | bool
+
+- name: Include secrets/configmaps creation task
+  include_tasks: create_secrets_configmaps.yaml
+  when: not create_MCO | bool

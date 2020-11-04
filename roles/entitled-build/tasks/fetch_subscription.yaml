@@ -1,5 +1,6 @@
 ---
 - name: Fetch Subscription-manager config from source-host
+  become: true
   slurp:
     src: /etc/rhsm/rhsm.conf
   register: BASE64_ENCODED_RHSM_CONF
@@ -12,6 +13,7 @@
   delegate_to: "{{ subscription_host }}"
 
 - name: Find entitlements
+  become: true
   find:
     path: /etc/pki/entitlement/
     patterns: '^[0-9]*.pem'
@@ -25,6 +27,7 @@
     entitlement_certificates: "{{ entitlement_certificates_find.files | map(attribute='path') | map('basename') | map('splitext') | map('first') | list }}"
 
 - name: Fetch Subscription-certificates from source-host
+  become: true
   slurp:
     src: "/etc/pki/entitlement/{{ item }}.pem"
   register: BASE64_ENCODED_PEM_FILE_RES
@@ -32,6 +35,7 @@
   delegate_to: "{{ subscription_host }}"
 
 - name: Fetch Subscription-certificate key from source-host
+  become: true
   slurp:
     src: "/etc/pki/entitlement/{{ item }}-key.pem"
   register: BASE64_ENCODED_PEM_FILE_KEY_RES
