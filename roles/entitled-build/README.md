@@ -3,6 +3,7 @@ Role Name
 
 This role assists with the creation of OpenShift MachineConfigs in order to consume Red Hat subscriptions on a OpenShift node.
 Please see https://access.redhat.com/solutions/4908771 for detailed manual instructions on preparing a node for entitled-builds.
+Also note that the [documentation](https://docs.openshift.com/container-platform/4.5/builds/running-entitled-builds.html) also lists another option for builds. 
 
 Requirements
 ------------
@@ -12,9 +13,9 @@ Besides an OpenShift cluster with RHCOS nodes and a subscribed host, there are n
 Role Variables
 --------------
 
-* subscription_host : hostname of host wich is subscribed to either a local Satellite or directly to RHSM.
-* create_MCO: boolean which switches between machineconfig and secrets/configmaps output. Defaults to false 
-  resulting file will either be /tmp/MCO.yaml or /tmp/secrets_configmaps.yaml depending on `create_MCO`
+* `subscription_host` : hostname of host wich is subscribed to either a local Satellite or directly to RHSM.
+* `create_MCO`: boolean which switches between machineconfig and secrets/configmaps output. Defaults to false 
+  resulting file will either be `/tmp/MCO.yaml` or `/tmp/secrets_configmaps.yaml` depending on `create_MCO`
 
 Dependencies
 ------------
@@ -35,13 +36,13 @@ To create a MCO config, create the following playbook:
 ```
 You may also use a one-liner like this:
 
-`ansible-playbook -D entitled-build.yaml -i <subscription-host>, -e subscription_host=<subscription-host>
+`ansible-playbook -D entitled-build.yaml -i <subscription-host>, -e subscription_host=<subscription-host>`
 
 Afterwards run the playbook against this host:
 
 `ansible-playbook -i localhost, <playbook.yaml>`
 
-You will find the resulting MCO.yaml/secrets_configmaps.yaml in /tmp on the invoking host.
+You will find the resulting MCO.yaml/secrets_configmaps.yaml in /tmp of the invoking host.
 
 If you are running OpenShift, you may deploy the machineconfigs / secrets as follows:
 
