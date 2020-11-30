@@ -12,6 +12,15 @@
     state: present
   tags: always
 
+- name: "ensure deployment timeout is adjusted"
+  become: true
+  become_user: jboss
+  command:
+    cmd: "/opt/rh/rh-sso7/root/usr/share/keycloak/bin/jboss-cli.sh --connect --command='/system-property=jboss.as.management.blocking.timeout:add(boot-time=true,value={{ sso_deployment_timeout }})'"
+  ignore_errors: true
+  changed_when: false
+  tags: always
+
 - name: "allow proxied access in standalone.xml"
   become: true
   lineinfile:

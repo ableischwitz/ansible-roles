@@ -8,6 +8,7 @@ ipa_password: password
 sso_admin_user: admin
 sso_admin_pass: admin
 sso_admin_auth_realm: master
+sso_deployment_timeout: 900
 
 sso_mailserver_host: "mail.example.com"
 sso_mailserver_port: "465"
