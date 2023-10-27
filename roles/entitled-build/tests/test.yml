@@ -1,6 +1,0 @@
----
-- hosts: localhost
-  remote_user: root
-  gather_facts: false
-  roles:
-    - entitled-build
