@@ -1,0 +1,74 @@
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 50-rhsm-conf
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+      - contents:
+          source: "data:text/plain;charset=utf-8;base64,{{ base64_encoded_rhsm_conf }}"
+        filesystem: root
+        mode: 0644
+        path: /etc/rhsm/rhsm.conf
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 50-katello-server-ca-pem
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+      - contents:
+          source: "data:text/plain;charset=utf-8;base64,{{ base64_encoded_katello_server_ca }}"
+        filesystem: root
+        mode: 0644
+        path: /etc/rhsm/ca/katello-server-ca.pem
+{% for entitlement in entitlement_certificates %}
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: "50-entitlement-{{ entitlement }}-pem"
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+      - contents:
+          source: "data:text/plain;charset=utf-8;base64,{{ base64_encoded_pem_file[entitlement] }}"
+        filesystem: root
+        mode: 0644
+        path: "/etc/pki/entitlement/{{ entitlement }}"
+--- 
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: "50-entitlement-{{ entitlement }}-key-pem"
+spec:
+  config:
+    ignition:
+      version: 3.2.0
+    storage:
+      files:
+      - contents:
+          source: "data:text/plain;charset=utf-8;base64,{{ base64_encoded_pem_file_key[entitlement] }}"
+        filesystem: root
+        mode: 0644
+        path: "/etc/pki/entitlement/{{ entitlement }}-key.pem"
+{% endfor %}

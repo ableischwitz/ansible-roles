@@ -1,0 +1,4 @@
+---
+# defaults file for entitled-build
+entitled_build_subscription_host: localhost
+entitled_build_create_mc: false

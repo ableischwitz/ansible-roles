@@ -1,0 +1,58 @@
+---
+- name: Fetch Subscription-manager config from source-host
+  ansible.builtin.slurp:
+    src: /etc/rhsm/rhsm.conf
+  register: base64_encoded_rhsm_conf
+  delegate_to: "{{ entitled_build_subscription_host }}"
+
+- name: Fetch Subscription-manager server CA
+  ansible.builtin.slurp:
+    src: /etc/rhsm/ca/katello-server-ca.pem
+  register: base64_encoded_katello_server_ca
+  delegate_to: "{{ entitled_build_subscription_host }}"
+
+- name: Find entitlements
+  become: true
+  ansible.builtin.find:
+    path: /etc/pki/entitlement/
+    patterns: '^[0-9]*.pem'
+    use_regex: true
+    file_type: file
+  register: entitlement_certificates_find
+  delegate_to: "{{ entitled_build_subscription_host }}"
+
+- name: Build filename array
+  ansible.builtin.set_fact:
+    entitlement_certificates: "{{ entitlement_certificates_find.files | map(attribute='path') | map('basename') | map('splitext') | map('first') | list }}"
+
+- name: Fetch Subscription-certificates from source-host
+  become: true
+  ansible.builtin.slurp:
+    src: "/etc/pki/entitlement/{{ item }}.pem"
+  register: base64_encoded_pem_files_res
+  with_items: "{{ entitlement_certificates }}"
+  delegate_to: "{{ entitled_build_subscription_host }}"
+
+- name: Fetch Subscription-certificate key from source-host
+  become: true
+  ansible.builtin.slurp:
+    src: "/etc/pki/entitlement/{{ item }}-key.pem"
+  register: base64_encoded_pem_file_key_res
+  with_items: "{{ entitlement_certificates }}"
+  delegate_to: "{{ entitled_build_subscription_host }}"
+
+- name: Ensure base64_encoded_rhsm_conf fact is set
+  ansible.builtin.set_fact:
+    base64_encoded_rhsm_conf: "{{ base64_encoded_rhsm_conf.content }}"
+
+- name: Ensure base64_encoded_katello_server_ca is set
+  ansible.builtin.set_fact:
+    base64_encoded_katello_server_ca: "{{ base64_encoded_katello_server_ca.content }}"
+
+- name: Ensure bas64_encoded_pem_file is set
+  ansible.builtin.set_fact:
+    base64_encoded_pem_file: "{{ base64_encoded_pem_files_res.results | items2dict(key_name='item', value_name='content') }}"
+
+- name: Ensure base64_encoded_pem_file_key is set
+  ansible.builtin.set_fact:
+    base64_encoded_pem_file_key: "{{ base64_encoded_pem_file_key_res.results | items2dict(key_name='item', value_name='content') }}"

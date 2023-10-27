@@ -1,0 +1,10 @@
+---
+- name: Fetch redhat.repo from source-host
+  ansible.builtin.slurp:
+    src: /etc/yum.repos.d/redhat.repo
+  register: base64_encoded_redhat_repo_conf
+  delegate_to: "{{ entitled_build_subscription_host }}"
+
+- name: Ensure base64_encoded_redhat_repo_conf is set
+  ansible.builtin.set_fact:
+    base64_encoded_redhat_repo_conf: "{{ base64_encoded_redhat_repo_conf.content }}"

@@ -1,0 +1,8 @@
+---
+- name: Create MachineConfig template
+  connection: local
+  ansible.builtin.template:
+    src: machineconfig.yaml
+    dest: /tmp/MCO.yaml
+    mode: "0644"
+  delegate_to: localhost

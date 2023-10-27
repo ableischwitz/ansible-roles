@@ -1,0 +1,15 @@
+---
+# tasks file for entitled-build
+- name: Include subscription fetch tasks
+  ansible.builtin.include_tasks: fetch_subscription.yaml
+
+- name: Include repository fetch task
+  ansible.builtin.include_tasks: fetch_repositories.yaml
+
+- name: Include MCO creation task
+  ansible.builtin.include_tasks: create_machineconfig.yaml
+  when: entitled_build_create_mc is true | bool
+
+- name: Include secrets/configmaps creation task
+  ansible.builtin.include_tasks: create_secrets_configmaps.yaml
+  when: entitled_build_create_mc is false | bool

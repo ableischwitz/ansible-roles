@@ -1,0 +1,53 @@
+---
+kind: BuildConfig
+apiVersion: build.openshift.io/v1
+metadata:
+  name: entitled-build-test
+spec:
+  triggers:
+    - type: ImageChange
+  source:
+    dockerfile: |
+      FROM ubi8:latest
+      MAINTAINER Andreas Bleischwitz
+      USER root
+      RUN ls -la /etc/pki/entitlement
+      RUN rm /etc/rhsm-host
+      RUN yum install -y https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm
+  strategy:
+    dockerStrategy:
+      from:
+        kind: "ImageStreamTag"
+        namespace: "openshift"
+        name: "ubi8:latest"
+      volumes:
+        - name: etc-pki-entitlement
+          source:
+            type: Secret
+            secret:
+              secretName: etc-pki-entitlement
+              defaultMode: 440
+          mounts:
+            - destinationPath: /etc/pki/entitlement/
+        - name: redhat-repos-conf
+          source:
+            type: ConfigMap
+            configMap:
+              name: redhat-repos-conf
+              items:
+                - key: redhat.repo
+                  path: redhat.repo
+              defaultMode: 440
+          mounts:
+            - destinationPath: /etc/yum.repos.d/
+        - name: katello-server-ca-pem
+          source:
+            type: ConfigMap
+            configMap:
+              name: katello-server-ca-pem
+              items:
+                - key: katello-server-ca.pem
+                  path: katello-server-ca.pem
+              defaultMode: 440
+          mounts:
+            - destinationPath: /etc/rhsm/ca/
